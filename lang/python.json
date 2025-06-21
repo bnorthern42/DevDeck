@@ -1,0 +1,11 @@
+{
+  "name": "Python",
+  "icon": ":/icons/python.svg",
+  "file_extension": ".py",
+  "default_code": "print(\"Hello from Python\")",
+  "build_command": "",
+  "run_command": "python3 {filename}",
+  "comment_syntax": "#",
+  "exec_timeout_secs": 10
+}
+

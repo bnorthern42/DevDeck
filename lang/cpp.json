@@ -1,0 +1,10 @@
+{
+  "name": "C++",
+  "icon": ":/icons/cpp.svg",
+  "file_extension": ".cpp",
+  "default_code": "#include <iostream>\nint main(int argv, char** argc) {\n    std::cout << \"Hello from C++\" << std::endl;\n    return 0;\n}",
+  "build_command": "g++ {filename} -o {basename}",
+  "run_command": "./{basename}",
+  "comment_syntax": "//",
+  "exec_timeout_secs": 15
+}
