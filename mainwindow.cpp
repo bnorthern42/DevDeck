@@ -8,7 +8,7 @@
 #include <QDateTime>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow)
+    : QMainWindow(parent), ui(new Ui::MainWindow), isDirty(false)
 {
     ui->setupUi(this);
     loadLanguageConfigurations();
@@ -17,6 +17,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->buildButton, &QPushButton::clicked, this, &MainWindow::on_buildButton_clicked);
     connect(ui->runButton, &QPushButton::clicked, this, &MainWindow::on_runButton_clicked);
     connect(ui->clearOutputButton, &QPushButton::clicked, ui->outputPanel, &QTextEdit::clear);
+
+    openAction = new QAction("Open", this);
+    saveAction = new QAction("Save", this);
+    menuBar->addAction(openAction);
+    menuBar->addAction(saveAction);
+    connect(openAction, &QAction::triggered, this, &MainWindow::onOpenFile);
+    connect(saveAction, &QAction::triggered, this, &MainWindow::onSaveFile);
+
+    codeEditor = new QTextEdit(this);
+    setCentralWidget(codeEditor);
 }
 
 MainWindow::~MainWindow()
@@ -82,6 +92,37 @@ void MainWindow::on_runButton_clicked()
     process.waitForFinished();
     QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
     ui->outputPanel->appendTimestampedOutput(output, false);
+}
+
+void MainWindow::on_clearOutputButton_clicked()
+{
+    ui->outputPanel->clear();
+}
+
+void MainWindow::onOpenFile()
+{
+    QString fileName = QFileDialog::getOpenFileName(this, "Open File", "", "Text Files (*.txt);;All Files (*)");
+    if (!fileName.isEmpty()) {
+        QFile file(fileName);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            codeEditor->setPlainText(file.readAll());
+            isDirty = false;
+            file.close();
+        }
+    }
+}
+
+void MainWindow::onSaveFile()
+{
+    QString fileName = QFileDialog::getSaveFileName(this, "Save File", "", "Text Files (*.txt);;All Files (*)");
+    if (!fileName.isEmpty()) {
+        QFile file(fileName);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            file.write(codeEditor->toPlainText().toUtf8());
+            isDirty = false;
+            file.close();
+        }
+    }
 }
 
 void MainWindow::loadLanguageConfigurations(const QString &language)
