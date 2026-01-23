@@ -6,6 +6,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    loadLanguageConfigurations();
     connect(ui->languageSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::on_languageSelector_currentIndexChanged);
     connect(ui->buildButton, &QPushButton::clicked, this, &MainWindow::on_buildButton_clicked);
@@ -15,6 +16,30 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::loadLanguageConfigurations()
+{
+    QDir langDir("lang");
+    QStringList filter("*.json");
+    QStringList files = langDir.entryList(filter, QDir::Files);
+
+    for (const QString &file : files) {
+        if (file.contains(".json")) {
+            QString languageName = file.left(file.indexOf('.'));
+            ui->languageSelector->addItem(languageName);
+        }
+    }
+
+    // Validate required fields
+    if (ui->languageSelector->count() == 0) {
+        QMessageBox::warning(this, "Error", "No language configurations found.");
+        ui->buildButton->setEnabled(false);
+        ui->runButton->setEnabled(false);
+    } else {
+        ui->buildButton->setEnabled(true);
+        ui->runButton->setEnabled(true);
+    }
 }
 
 void MainWindow::on_languageSelector_currentIndexChanged(int index)
