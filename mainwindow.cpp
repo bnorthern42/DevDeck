@@ -2,6 +2,9 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QProcessEnvironment>
+#include <QDir>
+#include <QTemporaryFile>
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
