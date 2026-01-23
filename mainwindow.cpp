@@ -8,7 +8,7 @@
 #include <QDateTime>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow), isDirty(false)
+    : QMainWindow(parent), ui(new Ui_MainWindow), isDirty(false)
 {
     ui->setupUi(this);
     loadLanguageConfigurations();
