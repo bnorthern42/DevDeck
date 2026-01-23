@@ -1,16 +1,17 @@
+// mainwindow.h
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QTextEdit>
+#include <QComboBox>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QFileDialog>
+#include <QToolBar>
 
-QT_BEGIN_NAMESPACE
-namespace Ui {
-class MainWindow;
-}
-QT_END_NAMESPACE
-
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
@@ -18,6 +19,11 @@ public:
     ~MainWindow();
 
 private:
-    Ui::MainWindow *ui;
+    QTextEdit *codeEditor;
+    QComboBox *languageSelector;
+    QMenuBar *menuBar;
+    QToolBar *toolbar;
+    void setupUI();
 };
+
 #endif // MAINWINDOW_H
