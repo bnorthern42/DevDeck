@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QTemporaryFile>
 #include <QDebug>
+#include <QDateTime>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -15,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::on_languageSelector_currentIndexChanged);
     connect(ui->buildButton, &QPushButton::clicked, this, &MainWindow::on_buildButton_clicked);
     connect(ui->runButton, &QPushButton::clicked, this, &MainWindow::on_runButton_clicked);
+    connect(ui->clearOutputButton, &QPushButton::clicked, ui->outputPanel, &QTextEdit::clear);
 }
 
 MainWindow::~MainWindow()
@@ -64,7 +66,7 @@ void MainWindow::on_buildButton_clicked()
     process.start(buildCMD);
     process.waitForFinished();
     QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
-    ui->outputPanel->setText(output);
+    ui->outputPanel->appendTimestampedOutput(output, true);
 }
 
 void MainWindow::on_runButton_clicked()
@@ -79,7 +81,7 @@ void MainWindow::on_runButton_clicked()
     process.start(runCMD);
     process.waitForFinished();
     QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
-    ui->outputPanel->setText(output);
+    ui->outputPanel->appendTimestampedOutput(output, false);
 }
 
 void MainWindow::loadLanguageConfigurations(const QString &language)
