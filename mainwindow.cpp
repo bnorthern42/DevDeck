@@ -120,6 +120,7 @@ void MainWindow::onSaveFile()
         if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             file.write(codeEditor->toPlainText().toUtf8());
             isDirty = false;
+            emit fileSaved();
             file.close();
         }
     }

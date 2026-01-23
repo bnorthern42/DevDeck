@@ -33,6 +33,8 @@ private:
     QComboBox *languageSelector;
     QMenuBar *menuBar;
     QToolBar *toolbar;
+    QAction *openAction;
+    QAction *saveAction;
     bool isDirty;
 };
 
