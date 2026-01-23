@@ -1,27 +1,13 @@
 #include "mainwindow.h"
-#include "ui_main_window.h"
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QComboBox>
-#include <QTextEdit>
+#include <QFileDialog>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
+    : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    process = new QProcess(this);
-
-    // Populate language dropdown
-    QStringList languages;
-    QJsonArray langFiles = QJsonDocument::fromJson(readLanguageFiles()).array();
-    for (const QJsonValue &langFile : langFiles) {
-        QString language = langFile.toObject().value("language").toString();
-        languages.append(language);
-    }
-    ui->languageDropdown->addItems(languages);
-
-    // Connect buttons to slots
+    connect(ui->languageSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::on_languageSelector_currentIndexChanged);
     connect(ui->buildButton, &QPushButton::clicked, this, &MainWindow::on_buildButton_clicked);
     connect(ui->runButton, &QPushButton::clicked, this, &MainWindow::on_runButton_clicked);
 }
@@ -31,69 +17,98 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::on_languageSelector_currentIndexChanged(int index)
+{
+    QString selectedLanguage = ui->languageSelector->itemText(index);
+    loadLanguageConfigurations(selectedLanguage);
+}
+
 void MainWindow::on_buildButton_clicked()
 {
-    QString language = ui->languageDropdown->currentText();
-    QJsonObject langJson = readLanguageConfig(language);
-    QString buildCommand = langJson.value("build_command").toString();
-
-    process->start(buildCommand);
-    connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
-        ui->outputPanel->append(process->readAllStandardOutput());
-    });
+    if (currentLanguage.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Please select a language first.");
+        return;
+    }
+    QByteArray buildCMD = getBuildCMD();
+    // Execute the build command
+    QProcess process;
+    process.start(buildCMD);
+    process.waitForFinished();
+    QString output = process.readAllStandardOutput();
+    ui->outputPanel->setText(output);
 }
 
 void MainWindow::on_runButton_clicked()
 {
-    QString language = ui->languageDropdown->currentText();
-    QJsonObject langJson = readLanguageConfig(language);
-    QString runCommand = langJson.value("run_command").toString();
-
-    process->start(runCommand);
-    connect(process, &QProcess::readyReadStandardOutput, this, [this]() {
-        ui->outputPanel->append(process->readAllStandardOutput());
-    });
-    connect(process, &QProcess::readyReadStandardError, this, [this]() {
-        ui->outputPanel->append(process->readAllStandardError());
-    });
-}
-
-QByteArray MainWindow::readLanguageFiles()
-{
-    // Read and return all language JSON files
-    QJsonArray langFiles;
-    QDirIterator it("path/to/lang", QStringList() << "*.json", QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        QJsonObject langFile = QJsonDocument::fromJson(read_file({it.next()})).object();
-        langFiles.append(langFile);
+    if (currentLanguage.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Please select a language first.");
+        return;
     }
-    return QJsonDocument(langFiles).toJson();
+    QByteArray runCMD = getRunCMD();
+    // Execute the run command
+    QProcess process;
+    process.start(runCMD);
+    process.waitForFinished();
+    QString output = process.readAllStandardOutput();
+    ui->outputPanel->setText(output);
 }
 
-void MainWindow::loadLanguageConfigurations() {
+void MainWindow::loadLanguageConfigurations(const QString &language)
+{
+    currentLanguage = language;
     QDir langDir("lang");
     QStringList filter("*.json");
     QStringList files = langDir.entryList(filter, QDir::Files);
 
     for (const QString &file : files) {
-        QString filePath = langDir.filePath(file);
-        QFile jsonFile(filePath);
-        if (jsonFile.open(QFile::ReadOnly)) {
-            QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
-            if (doc.isObject()) {
-                QJsonObject obj = doc.object();
-
-                // Validate required fields
-                if (!obj.contains("name") || !obj.contains("file_extension") || 
-                    !obj.contains("build") || !obj.contains("run")) {
-                    qWarning() << "Invalid language configuration in" << filePath;
-                    continue;
+        if (file.startsWith(language)) {
+            QString filePath = langDir.filePath(file);
+            QFile jsonFile(filePath);
+            if (jsonFile.open(QFile::ReadOnly)) {
+                QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
+                if (doc.isObject()) {
+                    QJsonObject obj = doc.object();
+                    ui->buildButton->setText(obj["buildCMD"].toString());
+                    ui->runButton->setText(obj["runCMD"].toString());
+                    break;
                 }
-
-                // Add to language selector
-                languageSelector->addItem(obj["name"].toString(), file);
             }
-            jsonFile.close();
         }
     }
+}
+
+QByteArray MainWindow::getBuildCMD()
+{
+    if (currentLanguage.isEmpty()) {
+        return QByteArray();
+    }
+    QDir langDir("lang");
+    QString filePath = langDir.filePath(currentLanguage + ".json");
+    QFile jsonFile(filePath);
+    if (jsonFile.open(QFile::ReadOnly)) {
+        QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
+        if (doc.isObject()) {
+            QJsonObject obj = doc.object();
+            return obj["buildCMD"].toString().toUtf8();
+        }
+    }
+    return QByteArray();
+}
+
+QByteArray MainWindow::getRunCMD()
+{
+    if (currentLanguage.isEmpty()) {
+        return QByteArray();
+    }
+    QDir langDir("lang");
+    QString filePath = langDir.filePath(currentLanguage + ".json");
+    QFile jsonFile(filePath);
+    if (jsonFile.open(QFile::ReadOnly)) {
+        QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
+        if (doc.isObject()) {
+            QJsonObject obj = doc.object();
+            return obj["runCMD"].toString().toUtf8();
+        }
+    }
+    return QByteArray();
 }
