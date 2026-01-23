@@ -74,6 +74,7 @@ CMakeLists.txt.user*
 # --------
 *.dll
 *.exe
+DevDeck
 
 # Directories with generated files
 .moc/
@@ -82,3 +83,7 @@ CMakeLists.txt.user*
 .rcc/
 .uic/
 /build*/
+cmake-build-*/
+.idea/
+.vscode/
+.aider*

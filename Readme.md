@@ -34,7 +34,7 @@
 
 ```bash
 # Clone and build
-git clone https://github.com/yourname/devdeck.git
+git clone https://github.com/bnorthern42/DevDeck
 cd devdeck
 mkdir build && cd build
 cmake ..

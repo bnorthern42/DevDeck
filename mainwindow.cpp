@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "ui_mainwindow.h"
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QProcessEnvironment>
@@ -6,32 +7,43 @@
 #include <QTemporaryFile>
 #include <QDebug>
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QProcess>
+#include <QPushButton>
+#include <QComboBox>
+#include <QFileInfo>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui_MainWindow), isDirty(false)
 {
     ui->setupUi(this);
-    loadLanguageConfigurations();
-    connect(ui->languageSelector, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &MainWindow::on_languageSelector_currentIndexChanged);
-    connect(ui->buildButton, &QPushButton::clicked, this, &MainWindow::on_buildButton_clicked);
-    connect(ui->runButton, &QPushButton::clicked, this, &MainWindow::on_runButton_clicked);
-    connect(ui->clearOutputButton, &QPushButton::clicked, ui->outputPanel, &QTextEdit::clear);
+    
+    // Use the codeEditor from the UI file
+    codeEditor = ui->codeEditor;
 
+    fileHandler = new FileHandler(codeEditor, this);
+
+    loadLanguageConfigurations();
+    
+    // Manual connections removed because on_objectName_signalName slots are auto-connected by setupUi
+    
     openAction = new QAction("Open", this);
     saveAction = new QAction("Save", this);
-    menuBar->addAction(openAction);
-    menuBar->addAction(saveAction);
-    connect(openAction, &QAction::triggered, this, &MainWindow::onOpenFile);
-    connect(saveAction, &QAction::triggered, this, &MainWindow::onSaveFile);
-
-    codeEditor = new QTextEdit(this);
-    setCentralWidget(codeEditor);
+    menuBar()->addAction(openAction);
+    menuBar()->addAction(saveAction);
+    
+    connect(openAction, &QAction::triggered, fileHandler, &FileHandler::onOpenFile);
+    connect(saveAction, &QAction::triggered, fileHandler, &FileHandler::onSaveFile);
+    
+    connect(fileHandler, &FileHandler::fileLoaded, this, &MainWindow::onFileLoaded);
+    connect(fileHandler, &FileHandler::fileSaved, this, &MainWindow::onFileSaved);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+    // fileHandler is a child of MainWindow (passed 'this' as parent), so it will be deleted automatically.
 }
 
 void MainWindow::loadLanguageConfigurations()
@@ -71,12 +83,14 @@ void MainWindow::on_buildButton_clicked()
         return;
     }
     QByteArray buildCMD = getBuildCMD();
+    if (buildCMD.isEmpty()) return;
+
     // Execute the build command
     QProcess process;
     process.start(buildCMD);
     process.waitForFinished();
     QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
-    ui->outputPanel->appendTimestampedOutput(output, true);
+    appendTimestampedOutput(output, true);
 }
 
 void MainWindow::on_runButton_clicked()
@@ -86,12 +100,14 @@ void MainWindow::on_runButton_clicked()
         return;
     }
     QByteArray runCMD = getRunCMD();
+    if (runCMD.isEmpty()) return;
+
     // Execute the run command
     QProcess process;
     process.start(runCMD);
     process.waitForFinished();
     QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
-    ui->outputPanel->appendTimestampedOutput(output, false);
+    appendTimestampedOutput(output, false);
 }
 
 void MainWindow::on_clearOutputButton_clicked()
@@ -99,54 +115,26 @@ void MainWindow::on_clearOutputButton_clicked()
     ui->outputPanel->clear();
 }
 
-void MainWindow::onOpenFile()
+void MainWindow::onFileLoaded()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, "Open File", "", "Text Files (*.txt);;All Files (*)");
-    if (!fileName.isEmpty()) {
-        QFile file(fileName);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            codeEditor->setPlainText(file.readAll());
-            isDirty = false;
-            file.close();
-        }
-    }
+    isDirty = false;
 }
 
-void MainWindow::onSaveFile()
+void MainWindow::onFileSaved()
 {
-    QString fileName = QFileDialog::getSaveFileName(this, "Save File", "", "Text Files (*.txt);;All Files (*)");
-    if (!fileName.isEmpty()) {
-        QFile file(fileName);
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            file.write(codeEditor->toPlainText().toUtf8());
-            isDirty = false;
-            emit fileSaved();
-            file.close();
-        }
-    }
+    isDirty = false;
 }
 
 void MainWindow::loadLanguageConfigurations(const QString &language)
 {
     currentLanguage = language;
-    QDir langDir("lang");
-    QStringList filter("*.json");
-    QStringList files = langDir.entryList(filter, QDir::Files);
-
-    for (const QString &file : files) {
-        if (file.startsWith(language)) {
-            QString filePath = langDir.filePath(file);
-            QFile jsonFile(filePath);
-            if (jsonFile.open(QFile::ReadOnly)) {
-                QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
-                if (doc.isObject()) {
-                    QJsonObject obj = doc.object();
-                    ui->buildButton->setText(obj["buildCMD"].toString());
-                    ui->runButton->setText(obj["runCMD"].toString());
-                    break;
-                }
-            }
-        }
+    currentTemplate = LangTemplate(language);
+    
+    ui->buildButton->setToolTip(currentTemplate.getBuildCMD());
+    ui->runButton->setToolTip(currentTemplate.getRunCMD());
+    
+    if (codeEditor->toPlainText().isEmpty()) {
+        codeEditor->setPlainText(currentTemplate.getDefaultCode());
     }
 }
 
@@ -155,17 +143,24 @@ QByteArray MainWindow::getBuildCMD()
     if (currentLanguage.isEmpty()) {
         return QByteArray();
     }
-    QDir langDir("lang");
-    QString filePath = langDir.filePath(currentLanguage + ".json");
-    QFile jsonFile(filePath);
-    if (jsonFile.open(QFile::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
-        if (doc.isObject()) {
-            QJsonObject obj = doc.object();
-            return obj["buildCMD"].toString().toUtf8();
-        }
+    
+    QString filePath = fileHandler->getCurrentFilePath();
+    if (filePath.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Please save the file before building.");
+        return QByteArray();
     }
-    return QByteArray();
+
+    QFileInfo fileInfo(filePath);
+    QString filename = fileInfo.absoluteFilePath();
+    QString basename = fileInfo.baseName(); // Filename without extension
+    // Note: baseName() returns "foo" for "foo.tar.gz". completeBaseName() returns "foo.tar".
+    // For "main.cpp", baseName is "main".
+    
+    QString cmd = currentTemplate.getBuildCMD();
+    cmd.replace("{filename}", filename);
+    cmd.replace("{basename}", basename);
+    
+    return cmd.toUtf8();
 }
 
 QByteArray MainWindow::getRunCMD()
@@ -173,15 +168,28 @@ QByteArray MainWindow::getRunCMD()
     if (currentLanguage.isEmpty()) {
         return QByteArray();
     }
-    QDir langDir("lang");
-    QString filePath = langDir.filePath(currentLanguage + ".json");
-    QFile jsonFile(filePath);
-    if (jsonFile.open(QFile::ReadOnly)) {
-        QJsonDocument doc = QJsonDocument::fromJson(jsonFile.readAll());
-        if (doc.isObject()) {
-            QJsonObject obj = doc.object();
-            return obj["runCMD"].toString().toUtf8();
-        }
+    
+    QString filePath = fileHandler->getCurrentFilePath();
+    if (filePath.isEmpty()) {
+        QMessageBox::warning(this, "Error", "Please save the file before running.");
+        return QByteArray();
     }
-    return QByteArray();
+
+    QFileInfo fileInfo(filePath);
+    QString filename = fileInfo.absoluteFilePath();
+    QString basename = fileInfo.baseName();
+    
+    QString cmd = currentTemplate.getRunCMD();
+    cmd.replace("{filename}", filename);
+    cmd.replace("{basename}", basename);
+    
+    return cmd.toUtf8();
+}
+
+void MainWindow::appendTimestampedOutput(const QString &text, bool isBuild)
+{
+    QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    QString prefix = isBuild ? "[BUILD]" : "[RUN]";
+    QString formattedOutput = QString("[%1] %2:\n%3\n").arg(timestamp, prefix, text);
+    ui->outputPanel->append(formattedOutput);
 }
