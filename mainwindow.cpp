@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QProcessEnvironment>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -59,7 +60,7 @@ void MainWindow::on_buildButton_clicked()
     QProcess process;
     process.start(buildCMD);
     process.waitForFinished();
-    QString output = process.readAllStandardOutput();
+    QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
     ui->outputPanel->setText(output);
 }
 
@@ -74,7 +75,7 @@ void MainWindow::on_runButton_clicked()
     QProcess process;
     process.start(runCMD);
     process.waitForFinished();
-    QString output = process.readAllStandardOutput();
+    QString output = process.readAllStandardOutput() + "\n" + process.readAllStandardError();
     ui->outputPanel->setText(output);
 }
 
